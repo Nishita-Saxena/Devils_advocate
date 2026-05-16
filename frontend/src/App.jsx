@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Dashboard from "./pages/Dashboard";
 import Analyze from "./pages/Analyze";
+import Live from "./pages/Live";
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/analyze" element={<Analyze />} />
+        <Route path="/live" element={<Live />} />
       </Routes>
     </BrowserRouter>
   );

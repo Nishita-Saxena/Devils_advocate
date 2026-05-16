@@ -1,14 +1,176 @@
+print("AAAAAAAA MAIN FILE LOADED")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import UploadFile, File
 from pydantic import BaseModel
+
 import ollama
 import json
-from fastapi import UploadFile, File
 import fitz
+
 
 app = FastAPI()
 
+
+# ====================================
+# MASTER PROMPT
+# ====================================
+
+MASTER_PROMPT = """
+You are Devil's Advocate.
+
+An elite AI collaboration intelligence system designed to detect failures in collective reasoning during brainstorming sessions, strategic meetings, startup discussions, classroom collaborations, executive reviews, and team decision-making environments.
+
+Your purpose is NOT to summarize discussions.
+
+Your purpose is to:
+- challenge weak consensus,
+- detect groupthink,
+- expose blind spots,
+- surface ignored stakeholders,
+- identify hidden assumptions,
+- detect ethical and legal risks,
+- reveal missing perspectives,
+- generate intelligent counterarguments,
+- evaluate decision quality,
+- and improve cognitive diversity.
+
+You must behave like a world-class:
+- systems thinker,
+- strategic advisor,
+- organizational psychologist,
+- risk analyst,
+- ethicist,
+- and devil's advocate.
+
+--------------------------------------------------
+
+ANALYSIS OBJECTIVES
+
+Analyze the discussion deeply.
+
+Focus on:
+
+1. GROUPTHINK RISK
+- Did the group converge too quickly?
+- Was dissent absent?
+- Did participants reinforce each other repeatedly?
+- Were assumptions left unchallenged?
+- only value allowed as response for GROUPTHINK RISK are: "LOW", "MEDIUM", "HIGH", "CRITICAL"
+- Severity Rules:
+- LOW → healthy disagreement exists
+- MEDIUM → mild consensus acceleration
+- HIGH → strong unchallenged alignment
+- CRITICAL → near-total agreement with no opposition
+
+2. COUNTERARGUMENTS
+- Generate the strongest intelligent opposing perspective.
+- Challenge the dominant narrative directly.
+
+3. BLIND SPOTS
+- Identify critical issues ignored by the group.
+- Detect operational, strategic, human, financial, legal, or societal oversights.
+
+4. IGNORED STAKEHOLDERS
+- Identify individuals or groups affected but not represented.
+- Examples:
+  employees,
+  customers,
+  regulators,
+  students,
+  minority users,
+  legal teams,
+  support staff,
+  society,
+  future users.
+
+5. ETHICAL RISKS
+- Detect:
+  bias,
+  privacy concerns,
+  manipulation,
+  exploitation,
+  surveillance,
+  labor displacement,
+  transparency issues,
+  consent problems,
+  governance risks.
+
+6. MISSING PERSPECTIVES
+- What viewpoint is absent?
+- Which expertise domain was never considered?
+- Examples:
+  legal,
+  customer,
+  psychological,
+  operational,
+  accessibility,
+  security,
+  public relations,
+  compliance.
+
+7. CONFIDENCE LEVEL
+- Estimate how overconfident or uncertain the group appears.
+- Detect:
+  overconfidence,
+  optimism bias,
+  emotional certainty,
+  weak evidence,
+  assumption-heavy reasoning.
+
+8. RECOMMENDATION
+- Provide one concise strategic recommendation to improve discussion quality and decision robustness.
+
+--------------------------------------------------
+
+REASONING STYLE
+
+You must:
+- think critically,
+- reason systemically,
+- identify second-order effects,
+- detect emotional reinforcement loops,
+- identify consensus acceleration,
+- detect premature certainty,
+- prioritize long-term consequences over short-term excitement.
+
+Do NOT be agreeable.
+
+Do NOT merely validate the discussion.
+
+Actively challenge weak reasoning.
+
+--------------------------------------------------
+
+OUTPUT RULES
+
+Return ONLY raw JSON.
+
+Do NOT use markdown.
+Do NOT explain.
+Do NOT add commentary outside JSON.
+
+Use this exact schema:
+
+{
+  "groupthink_score": "...",
+  "counterargument": "...",
+  "blind_spot": "...",
+  "ignored_stakeholder": "...",
+  "ethical_risk": "...",
+  "missing_perspective": "...",
+  "confidence_level": "...",
+  "recommendation": "..."
+}
+
+"""
+
+
+# ====================================
 # CORS
+# ====================================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,62 +179,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request Model
+
+# ====================================
+# REQUEST MODEL
+# ====================================
+
 class TranscriptRequest(BaseModel):
     transcript: str
 
-# Test Route
-@app.get("/")
-def home():
-    return {"message": "Backend running"}
 
-# AI Analysis Route
-@app.post("/analyze")
-async def analyze_discussion(data: TranscriptRequest):
+# ====================================
+# HOME
+# ====================================
+
+@app.get("/")
+async def home():
+
+    return {
+        "message": "Devil's Advocate backend running"
+    }
+
+
+# ====================================
+# TEST ROUTE
+# ====================================
+
+@app.get("/test-final")
+async def test_final():
+
+    return {
+        "working": True
+    }
+
+
+# ====================================
+# MASTER ANALYSIS FUNCTION
+# ====================================
+
+def run_analysis(transcript: str):
 
     prompt = f"""
-    You are an AI collaboration analyst.
-
-    Analyze the following brainstorming discussion.
-
-    Detect:
-    - groupthink risk
-    - blind spots
-    - missing perspectives
-    - counterarguments
-    - emotional bias
-    - ignored stakeholder
-    - confidence level
-
-    task sequence:
-    1. Detect level of groupthink
-    2. Identify ignored stakeholders
-    3. Detect hidden assumptions
-    4. Generate a strong counterargument
-    5. Identify ethical or legal risks
-    6. Estimate confidence level
-
-    Return ONLY raw JSON.
-    Do not use markdown.
-    Do not explain anything.
-
-    Example format:
-      {{
-        "groupthink_score": "...",
-        "counterargument": "...",
-        "blind_spot": "...",
-        "ignored_stakeholder": "...",
-        "ethical_risk": "...",
-        "confidence_level": "..."
-      }}
-
+    {MASTER_PROMPT}
 
     Discussion:
-    {data.transcript}
+    {transcript}
     """
 
     response = ollama.chat(
         model="mistral",
+        format="json",
         messages=[
             {
                 "role": "user",
@@ -83,90 +238,103 @@ async def analyze_discussion(data: TranscriptRequest):
 
     text = response["message"]["content"]
 
-    # Remove markdown formatting
-    text = text.replace("```json", "").replace("```", "").strip()
+    text = text.replace(
+        "```json",
+        ""
+    ).replace(
+        "```",
+        ""
+    ).strip()
 
     try:
+
         result = json.loads(text)
+
     except Exception as e:
+
+        print("JSON ERROR:", e)
+        print("RAW OUTPUT:", text)
+
         result = {
             "groupthink_score": "Unknown",
-            "counterargument": text,
-            "blind_spot": f"JSON parsing failed: {str(e)}",
-            "missing_perspective": "Unknown"
+            "counterargument": "Model formatting issue",
+            "blind_spot": "Unable to parse response",
+            "ignored_stakeholder": "Unknown",
+            "ethical_risk": "Unknown",
+            "missing_perspective": "Unknown",
+            "confidence_level": "Unknown",
+            "recommendation": "Retry analysis"
         }
 
     return result
 
-@app.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
 
-    # Read PDF bytes
+# ====================================
+# MANUAL ANALYSIS
+# ====================================
+
+@app.post("/analyze")
+async def analyze_discussion(
+    data: TranscriptRequest
+):
+
+    return run_analysis(
+        data.transcript
+    )
+
+
+# ====================================
+# PDF ANALYSIS
+# ====================================
+
+@app.post("/upload-pdf")
+async def upload_pdf(
+    file: UploadFile = File(...)
+):
+
     pdf_bytes = await file.read()
 
-    # Open PDF
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    doc = fitz.open(
+        stream=pdf_bytes,
+        filetype="pdf"
+    )
 
     extracted_text = ""
 
-    # Extract text page by page
     for page in doc:
+
         extracted_text += page.get_text()
 
-    # AI Prompt
-    prompt = f"""
-    You are an AI collaboration intelligence system.
-
-    Analyze the discussion transcript below.
-
-    Detect:
-    - groupthink risk
-    - blind spots
-    - ignored stakeholders
-    - counterarguments
-    - ethical risks
-    - confidence level
-
-    Return ONLY raw JSON.
-
-    Format:
-    {{
-      "groupthink_score": "...",
-      "counterargument": "...",
-      "blind_spot": "...",
-      "ignored_stakeholder": "...",
-      "ethical_risk": "...",
-      "confidence_level": "..."
-    }}
-
-    Transcript:
-    {extracted_text}
-    """
-
-    response = ollama.chat(
-        model="mistral",
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ]
+    return run_analysis(
+        extracted_text
     )
 
-    text = response["message"]["content"]
 
-    text = text.replace("```json", "").replace("```", "").strip()
+# ====================================
+# LIVE ANALYSIS
+# ====================================
 
-    try:
-        result = json.loads(text)
-    except Exception as e:
-        result = {
-            "groupthink_score": "Unknown",
-            "counterargument": text,
-            "blind_spot": f"JSON parsing failed: {str(e)}",
-            "ignored_stakeholder": "Unknown",
-            "ethical_risk": "Unknown",
-            "confidence_level": "Unknown"
-        }
+@app.post("/live-analysis")
+async def live_analysis(
+    data: TranscriptRequest
+):
 
-    return result
+    rolling_context = data.transcript[-3000:]
+
+    return run_analysis(
+        rolling_context
+    )
+
+
+# ====================================
+# FINAL ANALYSIS
+# ====================================
+
+@app.post("/final-analysis")
+async def final_analysis(
+    data: TranscriptRequest
+):
+
+    return run_analysis(
+        data.transcript
+    )
