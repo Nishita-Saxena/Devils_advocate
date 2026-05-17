@@ -1,5 +1,3 @@
-print("AAAAAAAA MAIN FILE LOADED")
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import UploadFile, File
@@ -186,6 +184,7 @@ app.add_middleware(
 
 class TranscriptRequest(BaseModel):
     transcript: str
+    policy_context: str = ""
 
 
 # ====================================
@@ -216,10 +215,16 @@ async def test_final():
 # MASTER ANALYSIS FUNCTION
 # ====================================
 
-def run_analysis(transcript: str):
+def run_analysis(
+    transcript: str,
+    policy_context: str = ""
+):
 
     prompt = f"""
     {MASTER_PROMPT}
+
+    Organizational Policy Context:
+    {policy_context}
 
     Discussion:
     {transcript}
@@ -279,7 +284,8 @@ async def analyze_discussion(
 ):
 
     return run_analysis(
-        data.transcript
+        data.transcript,
+        data.policy_context
     )
 
 
@@ -322,7 +328,8 @@ async def live_analysis(
     rolling_context = data.transcript[-3000:]
 
     return run_analysis(
-        rolling_context
+        rolling_context,
+        data.policy_context
     )
 
 
@@ -336,5 +343,7 @@ async def final_analysis(
 ):
 
     return run_analysis(
-        data.transcript
+        data.transcript,
+        data.policy_context
     )
+
